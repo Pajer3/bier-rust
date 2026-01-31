@@ -61,6 +61,14 @@ impl LoginViewModel {
         let mut is_loading = self.is_loading;
         let mut error_msg = self.error_msg;
 
+        let email = (self.email)();
+        let password = (self.password)();
+
+        if email.trim().is_empty() || password.trim().is_empty() {
+            error_msg.set(Some("Vergeet niet je e-mail en wachtwoord in te vullen!".to_string()));
+            return;
+        }
+
         is_loading.set(true);
         error_msg.set(None);
 
@@ -93,16 +101,16 @@ impl LoginViewModel {
                         } else if let Some(errors) = body.errors {
                             error_msg.set(Some(errors[0].message.clone()));
                         } else {
-                            error_msg.set(Some("Onbekende server fout".to_string()));
+                            error_msg.set(Some("Oeps, er ging iets mis bij de server. Probeer het later nog eens.".to_string()));
                         }
                     }
-                    Err(e) => {
-                        error_msg.set(Some(format!("Data fout: {}", e)));
+                    Err(_) => {
+                        error_msg.set(Some("Er is een probleem met de gegevens. Onze fout!".to_string()));
                     }
                 }
             }
-            Err(e) => {
-                error_msg.set(Some(format!("Netwerk fout: {}", e)));
+            Err(_) => {
+                error_msg.set(Some("Check je internetverbinding even, we kunnen de server niet bereiken.".to_string()));
             }
         }
         is_loading.set(false);

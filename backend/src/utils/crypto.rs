@@ -47,6 +47,7 @@ pub fn encrypt_metadata(data: &Metadata) -> Result<String, String> {
     Ok(hex::encode(final_payload))
 }
 
+#[allow(dead_code)]
 pub fn decrypt_metadata(encrypted_hex: &str) -> Result<Metadata, String> {
     let full_payload = hex::decode(encrypted_hex).map_err(|_| "Invalid hex in metadata")?;
     if full_payload.len() < 12 {

@@ -45,6 +45,7 @@ pub struct RegisterViewModel {
     pub username: Signal<String>,
     pub email: Signal<String>,
     pub password: Signal<String>,
+    pub confirm_password: Signal<String>,
     pub error_msg: Signal<Option<String>>,
     pub is_loading: Signal<bool>,
     pub success: Signal<bool>,
@@ -56,6 +57,7 @@ impl RegisterViewModel {
             username: Signal::new(String::new()),
             email: Signal::new(String::new()),
             password: Signal::new(String::new()),
+            confirm_password: Signal::new(String::new()),
             error_msg: Signal::new(None),
             is_loading: Signal::new(false),
             success: Signal::new(false),
@@ -66,6 +68,28 @@ impl RegisterViewModel {
         let mut is_loading = self.is_loading;
         let mut error_msg = self.error_msg;
         let mut success = self.success;
+
+        let username = (self.username)();
+        let email = (self.email)();
+        let password = (self.password)();
+
+        // 🛡️ Frontend Validatie
+        if username.trim().len() < 3 {
+            error_msg.set(Some("Kies een gebruikersnaam van minstens 3 tekens.".to_string()));
+            return;
+        }
+        if !email.contains('@') || !email.contains('.') || email.len() < 5 {
+            error_msg.set(Some("Oeps! Dat lijkt geen geldig e-mailadres te zijn.".to_string()));
+            return;
+        }
+        if password.len() < 8 {
+            error_msg.set(Some("Maak je wachtwoord wat sterker (minstens 8 tekens).".to_string()));
+            return;
+        }
+        if password != (self.confirm_password)() {
+            error_msg.set(Some("De wachtwoorden komen niet overeen. Probeer het nog eens.".to_string()));
+            return;
+        }
 
         is_loading.set(true);
         error_msg.set(None);
@@ -101,16 +125,16 @@ impl RegisterViewModel {
                         } else if let Some(errors) = body.errors {
                             error_msg.set(Some(errors[0].message.clone()));
                         } else {
-                            error_msg.set(Some("Onbekende server fout".to_string()));
+                            error_msg.set(Some("Oeps, er ging iets mis bij de server. Probeer het later nog eens.".to_string()));
                         }
                     }
-                    Err(e) => {
-                        error_msg.set(Some(format!("Data fout: {}", e)));
+                    Err(_) => {
+                        error_msg.set(Some("Er is een probleem met de gegevens. Onze fout!".to_string()));
                     }
                 }
             }
-            Err(e) => {
-                error_msg.set(Some(format!("Netwerk fout: {}", e)));
+            Err(_) => {
+                error_msg.set(Some("Check je internetverbinding even, we kunnen de server niet bereiken.".to_string()));
             }
         }
         is_loading.set(false);

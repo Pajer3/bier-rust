@@ -41,6 +41,12 @@ impl ForgotPasswordViewModel {
         let mut success = self.success;
         let mut error_msg = self.error_msg;
 
+        let email = (self.email)();
+        if !email.contains('@') || !email.contains('.') || email.len() < 5 {
+            error_msg.set(Some("Oeps! Dat lijkt geen geldig e-mailadres te zijn.".to_string()));
+            return;
+        }
+
         is_loading.set(true);
         error_msg.set(None);
 
@@ -70,13 +76,13 @@ impl ForgotPasswordViewModel {
                             error_msg.set(Some("Fout bij aanvraag".to_string()));
                         }
                     }
-                    Err(e) => {
-                        error_msg.set(Some(format!("Data fout: {}", e)));
+                    Err(_) => {
+                        error_msg.set(Some("Er is een probleem met de gegevens. Onze fout!".to_string()));
                     }
                 }
             }
-            Err(e) => {
-                error_msg.set(Some(format!("Netwerk fout: {}", e)));
+            Err(_) => {
+                error_msg.set(Some("Check je internetverbinding even, we kunnen de server niet bereiken.".to_string()));
             }
         }
         is_loading.set(false);

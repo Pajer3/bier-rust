@@ -48,6 +48,11 @@ impl VerifyEmailViewModel {
         let mut success = self.success;
         let mut error_msg = self.error_msg;
 
+        if (self.token)().trim().is_empty() {
+            error_msg.set(Some("Vergeet de code niet in te vullen!".to_string()));
+            return;
+        }
+
         is_loading.set(true);
         error_msg.set(None);
 
@@ -81,13 +86,13 @@ impl VerifyEmailViewModel {
                             error_msg.set(Some(errors[0].message.clone()));
                         }
                     }
-                    Err(e) => {
-                        error_msg.set(Some(format!("Data fout: {}", e)));
+                    Err(_) => {
+                        error_msg.set(Some("Er is een probleem met de gegevens. Onze fout!".to_string()));
                     }
                 }
             }
-            Err(e) => {
-                error_msg.set(Some(format!("Netwerk fout: {}", e)));
+            Err(_) => {
+                error_msg.set(Some("Check je internetverbinding even, we kunnen de server niet bereiken.".to_string()));
             }
         }
         is_loading.set(false);

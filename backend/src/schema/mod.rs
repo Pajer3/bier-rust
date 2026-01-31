@@ -89,11 +89,11 @@ impl Mutation {
 
         let user_record = match user_record {
             Some(u) => u,
-            None => return Err("Invalid email or password".into()),
+            None => return Err("E-mailadres of wachtwoord onjuist".into()),
         };
 
         if !crypto::verify_password(&password, &user_record.password_hash) {
-            return Err("Invalid email or password".into());
+            return Err("E-mailadres of wachtwoord onjuist".into());
         }
         let encrypted_metadata_hex = fs_util::load_encrypted_metadata(user_record.id).await?;
 
@@ -102,16 +102,23 @@ impl Mutation {
         
 
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(365);
+        
+        let mut tx = pool.begin().await.map_err(|_| "Database transaction failed")?;
+
         let session_record = sqlx::query!(
             "INSERT INTO sessions (user_id, user_agent, expires_at) VALUES ($1, $2, $3) RETURNING id",
             user_record.id,
             user_agent,
             expires_at
         )
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await?;
 
+        // Voorkom zombie sessions door token te maken voor commit
         let token = auth::create_jwt(user_record.id, &session_record.id.to_string())?;
+
+        tx.commit().await.map_err(|_| "Database commit failed")?;
+
 
         Ok(LoginResponse {
             user: User {
@@ -154,7 +161,7 @@ impl Mutation {
             .await?;
 
         if existing.is_some() {
-            return Err("User with this email already exists".into());
+            return Err("Er bestaat al een account met dit e-mailadres".into());
         }
 
         let password_hash = crypto::hash_password(&password)?;
@@ -199,10 +206,6 @@ impl Mutation {
 
         let token_id: Uuid = token_row.get("id");
 
-        tx.commit().await?;
-
-        let _ = crate::utils::email::send_verification_email(&email, &token_id.to_string()).await;
-        
         let meta = ctx.data::<crate::RequestMetadata>().ok();
         let user_agent = meta.and_then(|m| m.user_agent.clone());
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(365);
@@ -213,10 +216,17 @@ impl Mutation {
             user_agent,
             expires_at
         )
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await?;
 
+        // Voorkom 'zombie users' door de JWT te genereren voordat we committen
         let token = auth::create_jwt(user_id, &session_record.id.to_string())?;
+
+        tx.commit().await?;
+
+        // Email sturen doen we na de commit, anders wachten we onnodig lang
+        let _ = crate::utils::email::send_verification_email(&email, &token_id.to_string()).await;
+
 
         Ok(RegisterResponse {
             user: User {
@@ -272,6 +282,9 @@ impl Mutation {
     }
 
     async fn forgot_password(&self, ctx: &Context<'_>, email: String) -> Result<bool, async_graphql::Error> {
+        if !email.contains('@') || email.len() < 5 {
+            return Err("Ongeldig e-mailadres".into());
+        }
         let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
 
         let user = sqlx::query!("SELECT id FROM users WHERE email = $1", email)

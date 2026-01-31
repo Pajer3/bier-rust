@@ -21,13 +21,27 @@ pub fn GlassInput(
     #[props(default = "".to_string())] placeholder: String,
     oninput: EventHandler<FormEvent>,
 ) -> Element {
+    let mut show_password = use_signal(|| false);
+    let is_password = r#type == "password";
+    let current_type = if is_password && show_password() { "text" } else { &r#type };
+
     rsx! {
-        input {
-            class: "glass-input",
-            r#type: "{r#type}",
-            placeholder: "{placeholder}",
-            value: "{value}",
-            oninput: move |evt| oninput.call(evt)
+        div {
+            style: "position: relative; width: 100%;",
+            input {
+                class: "glass-input",
+                r#type: "{current_type}",
+                placeholder: "{placeholder}",
+                value: "{value}",
+                oninput: move |evt| oninput.call(evt)
+            }
+            if is_password {
+                div {
+                    style: "position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; opacity: 0.6; user-select: none;",
+                    onclick: move |_| show_password.set(!show_password()),
+                    if show_password() { "👁️" } else { "🙈" }
+                }
+            }
         }
     }
 }

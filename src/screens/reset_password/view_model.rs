@@ -30,6 +30,7 @@ struct GraphQLError {
 pub struct ResetPasswordViewModel {
     pub token: Signal<String>,
     pub new_password: Signal<String>,
+    pub confirm_password: Signal<String>,
     pub is_loading: Signal<bool>,
     pub success: Signal<bool>,
     pub error_msg: Signal<Option<String>>,
@@ -40,6 +41,7 @@ impl ResetPasswordViewModel {
         Self {
             token: Signal::new(token),
             new_password: Signal::new(String::new()),
+            confirm_password: Signal::new(String::new()),
             is_loading: Signal::new(false),
             success: Signal::new(false),
             error_msg: Signal::new(None),
@@ -50,6 +52,15 @@ impl ResetPasswordViewModel {
         let mut is_loading = self.is_loading;
         let mut success = self.success;
         let mut error_msg = self.error_msg;
+
+        if (self.new_password)().len() < 8 {
+            error_msg.set(Some("Maak je wachtwoord wat sterker (minstens 8 tekens).".to_string()));
+            return;
+        }
+        if (self.new_password)() != (self.confirm_password)() {
+            error_msg.set(Some("De wachtwoorden komen niet overeen. Probeer het nog eens.".to_string()));
+            return;
+        }
 
         is_loading.set(true);
         error_msg.set(None);
@@ -81,13 +92,13 @@ impl ResetPasswordViewModel {
                             error_msg.set(Some(errors[0].message.clone()));
                         }
                     }
-                    Err(e) => {
-                        error_msg.set(Some(format!("Data fout: {}", e)));
+                    Err(_) => {
+                        error_msg.set(Some("Er is een probleem met de gegevens. Onze fout!".to_string()));
                     }
                 }
             }
-            Err(e) => {
-                error_msg.set(Some(format!("Netwerk fout: {}", e)));
+            Err(_) => {
+                error_msg.set(Some("Check je internetverbinding even, we kunnen de server niet bereiken.".to_string()));
             }
         }
         is_loading.set(false);

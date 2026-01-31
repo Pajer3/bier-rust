@@ -83,6 +83,17 @@ pub fn RegisterScreen() -> Element {
                             password.set(evt.value());
                         }
                     }
+
+                    div { class: "label", "Wachtwoord bevestigen" }
+                    GlassInput {
+                        r#type: "password",
+                        placeholder: "Herhaal je wachtwoord",
+                        value: (vm().confirm_password)(),
+                        oninput: move |evt: FormEvent| {
+                            let mut confirm = vm().confirm_password;
+                            confirm.set(evt.value());
+                        }
+                    }
                 }
 
                 button {
