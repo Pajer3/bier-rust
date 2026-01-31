@@ -1,0 +1,71 @@
+-- 1. Users
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    avatar_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Clubs
+CREATE TABLE clubs (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    image_url TEXT,
+    image_path TEXT, -- Local path if stored on disk
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Club Memberships
+CREATE TYPE user_role AS ENUM ('OWNER', 'MOD', 'MEMBER');
+CREATE TYPE member_status AS ENUM ('ACTIVE', 'BANNED');
+
+CREATE TABLE club_memberships (
+    club_id INTEGER REFERENCES clubs(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    role user_role DEFAULT 'MEMBER',
+    status member_status DEFAULT 'ACTIVE',
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (club_id, user_id)
+);
+
+CREATE UNIQUE INDEX one_owner_per_club
+ON club_memberships (club_id)
+WHERE role = 'OWNER';
+
+-- 4. Club Messages
+CREATE TABLE club_messages (
+    id SERIAL PRIMARY KEY,
+    club_id INTEGER REFERENCES clubs(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_club_messages_club_time ON club_messages(club_id, created_at DESC);
+
+-- 5. Events
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    club_id INTEGER REFERENCES clubs(id) ON DELETE CASCADE, -- Nullable als openbaar event
+    title TEXT NOT NULL,
+    description TEXT,
+    location TEXT,
+    starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    ends_at TIMESTAMP WITH TIME ZONE,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. Event Attendees (RSVP)
+CREATE TYPE rsvp_status AS ENUM ('GOING', 'INTERESTED', 'NOT_GOING');
+
+CREATE TABLE event_attendees (
+    event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    status rsvp_status DEFAULT 'GOING',
+    PRIMARY KEY (event_id, user_id)
+);

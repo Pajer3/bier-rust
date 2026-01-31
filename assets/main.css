@@ -1,46 +1,147 @@
-/* App-wide styling */
-body {
-    background-color: #0f1116;
-    color: #ffffff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 20px;
+:root {
+    --bg: #0B0F17;
+    --bg2: #0F1623;
+
+    --glass: rgba(255, 255, 255, 0.08);
+    --glassHover: rgba(255, 255, 255, 0.12);
+    --glassBorder: rgba(255, 255, 255, 0.16);
+    --glassBorder2: rgba(255, 255, 255, 0.22);
+
+    --text: #EAF0FF;
+    --text2: rgba(234, 240, 255, 0.70);
+    --text3: rgba(234, 240, 255, 0.45);
+    --disabled: rgba(234, 240, 255, 0.28);
+
+    --accent: #0A84FF;
+    --success: #32D74B;
+    --warn: #FF9F0A;
+    --danger: #FF453A;
+
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-#hero {
+/* Reset margin/padding for the whole app */
+* {
     margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.body {
+    background-color: var(--bg);
+    background: radial-gradient(circle at 50% 0%, #1e293b 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    font-family: var(--font);
 }
 
-#links {
-    width: 400px;
-    text-align: left;
-    font-size: x-large;
-    color: white;
-    display: flex;
-    flex-direction: column;
+.glass {
+    background: var(--glass);
+    border: 1px solid var(--glassBorder);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
-#links a {
-    color: white;
-    text-decoration: none;
-    margin-top: 20px;
-    margin: 10px 0px;
-    border: white 1px solid;
-    border-radius: 5px;
-    padding: 10px;
+.glass-input {
+    background: rgba(15, 22, 35, 0.6);
+    border: 1px solid var(--glassBorder);
+    border-radius: 14px;
+    padding: 16px;
+    color: var(--text);
+    width: 100%;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.2s ease;
 }
 
-#links a:hover {
-    background-color: #1f1f1f;
+.glass-input:focus {
+    border-color: var(--accent);
+    background: rgba(15, 22, 35, 0.8);
+}
+
+.glass-input::placeholder {
+    color: var(--text3);
+}
+
+.glass-btn {
+    background: color-mix(in srgb, var(--accent) 80%, black 20%);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 14px;
     cursor: pointer;
+    font-weight: 600;
+    font-size: 16px;
+    width: 100%;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
 }
 
-#header {
-    max-width: 1200px;
+.glass-btn:active {
+    transform: scale(0.98);
+    opacity: 0.9;
 }
 
+a {
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.2s;
+}
 
+a:hover {
+    color: var(--text);
+}
 
+/* Decoratieve lijn met vierkantjes */
+.deco-line {
+    width: 2px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 40px auto;
+    position: relative;
+}
+
+.deco-square {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--accent);
+    position: absolute;
+    left: -11px;
+    /* (24 / 2) - (2 / 2) = 11 met border correctie */
+    background: transparent;
+}
+
+.deco-square.top {
+    top: -12px;
+    border-color: var(--accent);
+}
+
+.deco-square.bottom {
+    bottom: -12px;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Typography helper classes */
+h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 32px;
+    letter-spacing: -0.5px;
+}
+
+.label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 8px;
+    display: block;
+}

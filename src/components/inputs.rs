@@ -1,0 +1,19 @@
+use dioxus::prelude::*;
+
+#[component]
+pub fn GlassInput(
+    #[props(default = "".to_string())] value: String,
+    #[props(default = "text".to_string())] r#type: String,
+    #[props(default = "".to_string())] placeholder: String,
+    oninput: EventHandler<FormEvent>,
+) -> Element {
+    rsx! {
+        input {
+            class: "glass-input",
+            r#type: "{r#type}",
+            placeholder: "{placeholder}",
+            value: "{value}",
+            oninput: move |evt| oninput.call(evt)
+        }
+    }
+}
