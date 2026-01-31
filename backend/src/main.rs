@@ -94,8 +94,15 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set in .env");
+    let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    tracing::info!("Starting in {} mode", app_env);
+
+    let database_url = if app_env == "production" {
+        std::env::var("DATABASE_URL_PROD").expect("DATABASE_URL_PROD must be set in production")
+    } else {
+        std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set in .env")
+    };
     
     tracing::info!("Connecting to database...");
     let pool = PgPoolOptions::new()

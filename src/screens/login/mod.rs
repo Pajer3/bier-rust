@@ -2,14 +2,22 @@ use dioxus::prelude::*;
 pub mod view_model;
 use view_model::LoginViewModel;
 use crate::components::inputs::GlassInput;
-use crate::AuthState;
+use crate::{AuthState, NavState};
 
 #[component]
 pub fn LoginScreen() -> Element {
     let vm = use_signal(|| LoginViewModel::new());
     let auth = use_context::<Signal<AuthState>>();
+    let mut nav = use_context::<Signal<NavState>>();
 
     rsx! {
+        if (vm().is_loading)() {
+            div {
+                class: "loading-overlay",
+                div { class: "spinner" }
+            }
+        }
+
         div {
             class: "login-wrapper",
             style: "width: 100%; max-width: 400px; padding: 20px; padding-bottom: 120px; display: flex; flex-direction: column; align-items: center;",
@@ -54,18 +62,18 @@ pub fn LoginScreen() -> Element {
             a {
                 href: "#",
                 style: "align-self: flex-start; margin-bottom: 32px; font-weight: 600; font-size: 13px;",
+                onclick: move |_| nav.set(NavState::ForgotPassword),
                 "wachtwoord vergeten?"
             }
 
             button {
                 class: "glass-btn",
-                disabled: (vm().is_loading)(),
                 onclick: move |_| {
                     spawn(async move {
                         vm().perform_login(auth).await;
                     });
                 },
-                if (vm().is_loading)() { "LADEN..." } else { "LOGIN" }
+                "LOGIN"
             }
 
             div {
@@ -74,6 +82,7 @@ pub fn LoginScreen() -> Element {
                 a {
                     href: "#",
                     style: "font-weight: 700; color: var(--text);",
+                    onclick: move |_| nav.set(NavState::Register),
                     "Nieuw account."
                 }
             }

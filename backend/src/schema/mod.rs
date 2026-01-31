@@ -1,6 +1,8 @@
 use async_graphql::{Context, EmptySubscription, Object, Schema, SimpleObject};
 use crate::definitions::user::User;
 use crate::utils::{crypto, fs_util, auth};
+use sqlx::types::Uuid;
+use sqlx::Row;
 
 #[derive(SimpleObject)]
 pub struct RegisterResponse {
@@ -31,7 +33,7 @@ impl Query {
         let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
 
         let user_record = sqlx::query!(
-            "SELECT id, email, password_hash, display_name, avatar_url, created_at FROM users WHERE id = $1",
+            "SELECT id, email, password_hash, display_name, avatar_url, is_verified, created_at FROM users WHERE id = $1",
             auth_user.id
         )
         .fetch_optional(pool)
@@ -44,6 +46,7 @@ impl Query {
                 email: u.email,
                 password_hash: u.password_hash,
                 avatar_url: u.avatar_url.unwrap_or_default(),
+                is_verified: u.is_verified,
                 created_at: u.created_at.expect("Timestamp missing"),
             }),
             None => Err("Gebruiker niet gevonden".into()),
@@ -78,7 +81,7 @@ impl Mutation {
         let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing in context")?;
 
         let user_record = sqlx::query!(
-            "SELECT id, email, password_hash, display_name, avatar_url, created_at FROM users WHERE email = $1",
+            "SELECT id, email, password_hash, display_name, avatar_url, is_verified, created_at FROM users WHERE email = $1",
             email
         )
         .fetch_optional(pool)
@@ -117,6 +120,7 @@ impl Mutation {
                 email: user_record.email,
                 password_hash: user_record.password_hash,
                 avatar_url: user_record.avatar_url.unwrap_or_default(),
+                is_verified: user_record.is_verified,
                 created_at: user_record.created_at.expect("Timestamp missing"),
             },
             token,
@@ -183,9 +187,22 @@ impl Mutation {
         let encrypted_metadata_hex = crypto::encrypt_metadata(&metadata)?;
         
         fs_util::save_encrypted_metadata(&user_dir, &encrypted_metadata_hex).await?;
+        
+        let token_row = sqlx::query(
+            "INSERT INTO verification_tokens (user_id, token_type, expires_at) VALUES ($1, $2, $3) RETURNING id"
+        )
+        .bind(user_id)
+        .bind("VERIFY")
+        .bind(time::OffsetDateTime::now_utc() + time::Duration::hours(24))
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let token_id: Uuid = token_row.get("id");
 
         tx.commit().await?;
 
+        let _ = crate::utils::email::send_verification_email(&email, &token_id.to_string()).await;
+        
         let meta = ctx.data::<crate::RequestMetadata>().ok();
         let user_agent = meta.and_then(|m| m.user_agent.clone());
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(365);
@@ -208,10 +225,123 @@ impl Mutation {
                 email,
                 password_hash,
                 avatar_url: default_avatar_base64,
+                is_verified: false,
                 created_at,
             },
             token,
             encrypted_metadata: encrypted_metadata_hex,
         })
+    }
+
+    async fn verify_email(&self, ctx: &Context<'_>, token: String) -> Result<bool, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let token_uuid = Uuid::parse_str(&token).map_err(|_| "Ongeldig token")?;
+
+        let mut tx = pool.begin().await?;
+
+        let token_row = sqlx::query(
+            "SELECT user_id FROM verification_tokens WHERE id = $1 AND token_type = $2 AND expires_at > NOW()"
+        )
+        .bind(token_uuid)
+        .bind("VERIFY")
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(row) = token_row {
+            let user_id: i32 = row.get("user_id");
+            
+            sqlx::query(
+                "UPDATE users SET is_verified = TRUE WHERE id = $1"
+            )
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                "DELETE FROM verification_tokens WHERE id = $1"
+            )
+            .bind(token_uuid)
+            .execute(&mut *tx)
+            .await?;
+
+            tx.commit().await?;
+            Ok(true)
+        } else {
+            Err("Token ongeldig of verlopen".into())
+        }
+    }
+
+    async fn forgot_password(&self, ctx: &Context<'_>, email: String) -> Result<bool, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+
+        let user = sqlx::query!("SELECT id FROM users WHERE email = $1", email)
+            .fetch_optional(pool)
+            .await?;
+
+        if let Some(u) = user {
+            let token_row = sqlx::query(
+                "INSERT INTO verification_tokens (user_id, token_type, expires_at) VALUES ($1, $2, $3) RETURNING id"
+            )
+            .bind(u.id)
+            .bind("RESET")
+            .bind(time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+            .fetch_one(pool)
+            .await?;
+
+            let token_id: Uuid = token_row.get(0);
+            let _ = crate::utils::email::send_reset_email(&email, &token_id.to_string()).await;
+        }
+
+        Ok(true)
+    }
+
+    async fn reset_password(
+        &self,
+        ctx: &Context<'_>,
+        token: String,
+        new_password: String,
+    ) -> Result<bool, async_graphql::Error> {
+        if new_password.len() < 8 {
+            return Err("Wachtwoord moet minimaal 8 tekens zijn".into());
+        }
+
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let token_uuid = Uuid::parse_str(&token).map_err(|_| "Ongeldig token")?;
+
+        let mut tx = pool.begin().await?;
+
+        let token_row = sqlx::query(
+            "SELECT user_id FROM verification_tokens WHERE id = $1 AND token_type = $2 AND expires_at > NOW()"
+        )
+        .bind(token_uuid)
+        .bind("RESET")
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(row) = token_row {
+            let user_id: i32 = row.get("user_id");
+            let password_hash = crypto::hash_password(&new_password)?;
+            
+            sqlx::query(
+                "UPDATE users SET password_hash = $1 WHERE id = $2"
+            )
+            .bind(password_hash)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                "DELETE FROM verification_tokens WHERE user_id = $1 AND token_type = $2"
+            )
+            .bind(user_id)
+            .bind("RESET")
+            .execute(&mut *tx)
+            .await?;
+
+            tx.commit().await?;
+            Ok(true)
+        } else {
+            Err("Token ongeldig of verlopen".into())
+        }
     }
 }

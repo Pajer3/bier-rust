@@ -8,5 +8,6 @@ pub struct User {
     pub display_name: String,
     pub password_hash: String,
     pub avatar_url: String,
+    pub is_verified: bool,
     pub created_at: OffsetDateTime,
 }

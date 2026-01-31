@@ -4,34 +4,33 @@ use crate::AuthState;
 use crate::api::{GraphQLRequest, config::API_URL};
 
 #[derive(Serialize)]
-struct LoginVariables {
+struct RegisterVariables {
+    username: String,
     email: String,
     password: String,
 }
 
 #[derive(Deserialize)]
-struct LoginResponse {
-    data: Option<LoginData>,
+struct RegisterResponse {
+    data: Option<RegisterData>,
     errors: Option<Vec<GraphQLError>>,
 }
 
 #[derive(Deserialize)]
-struct LoginData {
-    #[serde(rename = "loginUser")]
-    login_user: Option<LoginSuccess>,
+struct RegisterData {
+    #[serde(rename = "registerUser")]
+    register_user: Option<RegisterSuccess>,
 }
 
 #[derive(Deserialize)]
-struct LoginSuccess {
+struct RegisterSuccess {
     token: String,
     user: UserSmall,
 }
 
 #[derive(Deserialize)]
 struct UserSmall {
-    pub id: i32,
-    #[serde(rename = "isVerified")]
-    pub is_verified: bool,
+    id: i32,
 }
 
 #[derive(Deserialize)]
@@ -40,26 +39,31 @@ struct GraphQLError {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub struct LoginViewModel {
+pub struct RegisterViewModel {
+    pub username: Signal<String>,
     pub email: Signal<String>,
     pub password: Signal<String>,
     pub error_msg: Signal<Option<String>>,
     pub is_loading: Signal<bool>,
+    pub success: Signal<bool>,
 }
 
-impl LoginViewModel {
+impl RegisterViewModel {
     pub fn new() -> Self {
         Self {
+            username: Signal::new(String::new()),
             email: Signal::new(String::new()),
             password: Signal::new(String::new()),
             error_msg: Signal::new(None),
             is_loading: Signal::new(false),
+            success: Signal::new(false),
         }
     }
 
-    pub async fn perform_login(&self, mut auth: Signal<AuthState>) {
+    pub async fn perform_register(&self, mut auth: Signal<AuthState>) {
         let mut is_loading = self.is_loading;
         let mut error_msg = self.error_msg;
+        let mut success = self.success;
 
         is_loading.set(true);
         error_msg.set(None);
@@ -67,8 +71,9 @@ impl LoginViewModel {
         let client = reqwest::Client::new();
         
         let request = GraphQLRequest {
-            query: "mutation($email: String!, $password: String!) { loginUser(email: $email, password: $password) { token user { id isVerified } } }",
-            variables: LoginVariables {
+            query: "mutation($username: String!, $email: String!, $password: String!) { registerUser(username: $username, email: $email, password: $password) { token user { id } } }",
+            variables: RegisterVariables {
+                username: (self.username)(),
                 email: (self.email)(),
                 password: (self.password)(),
             },
@@ -80,14 +85,11 @@ impl LoginViewModel {
             .await 
         {
             Ok(resp) => {
-                match resp.json::<LoginResponse>().await {
+                match resp.json::<RegisterResponse>().await {
                     Ok(body) => {
                         if let Some(data) = body.data {
-                            if let Some(success) = data.login_user {
-                                let mut auth_write = auth.write();
-                                auth_write.token = Some(success.token);
-                                auth_write.user_id = Some(success.user.id);
-                                auth_write.is_verified = success.user.is_verified;
+                            if data.register_user.is_some() {
+                                success.set(true);
                             }
                         } else if let Some(errors) = body.errors {
                             error_msg.set(Some(errors[0].message.clone()));
