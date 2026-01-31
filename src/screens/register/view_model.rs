@@ -30,7 +30,9 @@ struct RegisterSuccess {
 
 #[derive(Deserialize)]
 struct UserSmall {
-    id: i32,
+    pub id: i32,
+    #[serde(rename = "isVerified")]
+    pub is_verified: bool,
 }
 
 #[derive(Deserialize)]
@@ -71,7 +73,7 @@ impl RegisterViewModel {
         let client = reqwest::Client::new();
         
         let request = GraphQLRequest {
-            query: "mutation($username: String!, $email: String!, $password: String!) { registerUser(username: $username, email: $email, password: $password) { token user { id } } }",
+            query: "mutation($username: String!, $email: String!, $password: String!) { registerUser(username: $username, email: $email, password: $password) { token user { id isVerified } } }",
             variables: RegisterVariables {
                 username: (self.username)(),
                 email: (self.email)(),
@@ -88,7 +90,12 @@ impl RegisterViewModel {
                 match resp.json::<RegisterResponse>().await {
                     Ok(body) => {
                         if let Some(data) = body.data {
-                            if data.register_user.is_some() {
+                            if let Some(reg_success) = data.register_user {
+                                let mut auth_write = auth.write();
+                                auth_write.token = Some(reg_success.token);
+                                auth_write.user_id = Some(reg_success.user.id);
+                                auth_write.is_verified = reg_success.user.is_verified;
+                                crate::api::storage::save_auth_state(&auth_write);
                                 success.set(true);
                             }
                         } else if let Some(errors) = body.errors {

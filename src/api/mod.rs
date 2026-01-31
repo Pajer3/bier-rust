@@ -7,3 +7,4 @@ pub struct GraphQLRequest<V: Serialize> {
 }
 
 pub mod config;
+pub mod storage;

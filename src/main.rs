@@ -5,7 +5,9 @@ mod api;
 use dioxus::prelude::*;
 use screens::*;
 
-#[derive(Clone, Default)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct AuthState {
     pub token: Option<String>,
     pub user_id: Option<i32>,
@@ -27,7 +29,7 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 #[component]
 fn App() -> Element {
     // Globale auth state die overal in de app beschikbaar is
-    let auth = use_context_provider(|| Signal::new(AuthState::default()));
+    let auth = use_context_provider(|| Signal::new(crate::api::storage::load_auth_state()));
     // Navigatie state voor als we nog niet ingelogd zijn
     let nav = use_context_provider(|| Signal::new(NavState::Login));
 

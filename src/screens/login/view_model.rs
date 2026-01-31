@@ -88,6 +88,7 @@ impl LoginViewModel {
                                 auth_write.token = Some(success.token);
                                 auth_write.user_id = Some(success.user.id);
                                 auth_write.is_verified = success.user.is_verified;
+                                crate::api::storage::save_auth_state(&auth_write);
                             }
                         } else if let Some(errors) = body.errors {
                             error_msg.set(Some(errors[0].message.clone()));

@@ -72,6 +72,7 @@ impl VerifyEmailViewModel {
                                 success.set(true);
                                 if let Some(mut a) = auth {
                                     a.write().is_verified = true;
+                                    crate::api::storage::save_auth_state(&a.read());
                                 }
                             } else {
                                 error_msg.set(Some("Verificatie mislukt".to_string()));
