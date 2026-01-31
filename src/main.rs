@@ -1,24 +1,22 @@
 mod components;
+mod screens;
 
-use crate::components::login::Login;
 use dioxus::prelude::*;
+use screens::{LoginScreen, HomeScreen};
+
+#[derive(Clone, Default)]
+pub struct AuthState {
+    pub token: Option<String>,
+    pub user_id: Option<i32>,
+}
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
-fn main() {
-    dioxus::launch(App);
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Page {
-    Login,
-    Hero,
-}
-
 #[component]
 fn App() -> Element {
-    let mut current_page = use_signal(|| Page::Login);
+    // Globale auth state die overal in de app beschikbaar is
+    let auth = use_context_provider(|| Signal::new(AuthState::default()));
 
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
@@ -26,20 +24,16 @@ fn App() -> Element {
 
         div {
             class: "body",
-            match current_page() {
-                Page::Login => rsx! {
-                    Login {
-                        on_login: move |_| current_page.set(Page::Hero)
-                    }
-                },
-                Page::Hero => rsx! {
-                    div {
-                        class: "glass",
-                        style: "padding: 20px; color: var(--text);",
-                        "Ingelogd! (Hier komt de homepagina)"
-                    }
-                }
+            // Switch tussen Login en Home op basis van auth token
+            if auth().token.is_none() {
+                LoginScreen {}
+            } else {
+                HomeScreen {}
             }
         }
     }
+}
+
+fn main() {
+    dioxus::launch(App);
 }

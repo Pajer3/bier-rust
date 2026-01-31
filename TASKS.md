@@ -7,15 +7,17 @@ Dit project wordt een platform voor bierclubs en evenementen. Dit plan is opgest
 - [ ] **Tab Bar**: Maak een navigatiebalk die onderaan het scherm blijft staan (typisch voor mobiele apps).
 - [ ] **Thema**: Update `main.css` met een echt "bier-thema" (amber, donkerbruin, goud, schuim-wit).
 
-- [-] **Backend Setup**: Initialiseer een Rust backend (bijv. Axum of Actix-web) met een PostgreSQL database.
-  - [x] Database installatie & setup (`setup_db.sh`)
-  - [x] Database schema ontwerp (`implementation_plan.md`)
-  - [x] Migraties uitvoeren (`run_migrations.sh`)
-  - [x] Rust dependencies toevoegen (`sqlx`, `tokio`, etc.)
-  - [x] Database connectie opzetten in Rust
-- [ ] **Registratie & Login API**: Maak endpoints voor `/auth/register` en `/auth/login`.
-- [ ] **Frontend Auth State**: Gebruik een Dioxus `GlobalSignal` om bij te houden of een gebruiker is ingelogd.
-- [x] **Login Scherm koppelen**: Verbind je huidige login-scherm met de echte backend API. (UI Implementatie Gereed)
+- [x] **Backend Setup (GraphQL Refactor)**: Refactored naar een modulaire GraphQL architectuur.
+  - [x] Schema & Resolvers (`src/schema/mod.rs`)
+  - [x] Modulaire Utils (`src/utils/`)
+  - [x] Encrypted Metadata op schijf & Transactional Register
+- [ ] **Backend Security & Refinement**:
+  - [ ] **JWT (JSON Web Tokens)**: Genereer een token bij login voor sessie-beheer.
+  - [ ] **Auth Guard**: Beveilig queries zodat alleen ingelogde gebruikers data kunnen ophalen.
+  - [ ] **CORS**: Configureer Axum zodat de Dioxus app veilig kan communiceren.
+  - [ ] **Logging & Tracing**: Verbeter inzicht in GraphQL performance.
+  - [ ] **Input Validatie**: Check e-mail formaat en wachtwoord sterkte.
+  - [ ] **Sessions Tabel**: Houd actieve sessies bij in de database.
 
 ## Fase 3: Clubs & Leden
 - [ ] **Database Schema**: Voeg de `Clubs` en `ClubMemberships` tabellen toe.

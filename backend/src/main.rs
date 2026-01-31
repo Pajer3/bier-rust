@@ -1,28 +1,99 @@
+//███╗░░░███╗░█████╗░██████╗░██╗░░░██╗██╗░░░░░███████╗░██████╗
+//████╗░████║██╔══██╗██╔══██╗██║░░░██║██║░░░░░██╔════╝██╔════╝
+//██╔████╔██║██║░░██║██║░░██║██║░░░██║██║░░░░░█████╗░░╚█████╗░
+//██║╚██╔╝██║██║░░██║██║░░██║██║░░░██║██║░░░░░██╔══╝░░░╚═══██╗
+//██║░╚═╝░██║╚█████╔╝██████╔╝╚██████╔╝███████╗███████╗██████╔╝
+//╚═╝░░░░░╚═╝░╚════╝░╚═════╝░░╚═════╝░╚══════╝╚══════╝╚═════╝░
+
+mod definitions;
+mod schema;
+mod utils;
+
+use async_graphql::{EmptySubscription, Schema};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use axum::{
-    extract::State,
-    routing::get,
+    response::{self, IntoResponse},
+    routing::{get, post},
     Router,
+    Extension,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Clone)]
-struct AppState {
-    db: sqlx::PgPool,
+use crate::schema::{Query, Mutation, BierSchema};
+use crate::utils::auth::verify_jwt;
+use sqlx::types::Uuid;
+
+pub struct AuthUser {
+    pub id: i32,
+    pub session_id: Uuid,
 }
+
+pub struct RequestMetadata {
+    pub user_agent: Option<String>,
+}
+
+async fn graphql_handler(
+    Extension(schema): Extension<BierSchema>,
+    Extension(pool): Extension<sqlx::PgPool>,
+    headers: axum::http::HeaderMap,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    let mut req = req.into_inner();
+
+    let metadata = RequestMetadata {
+        user_agent: headers.get("user-agent").and_then(|h| h.to_str().ok().map(|s| s.to_string())),
+    };
+    req = req.data(metadata);
+
+    if let Some(auth_header) = headers.get("Authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer ") {
+                let token = &auth_str[7..];
+                if let Ok(claims) = verify_jwt(token) {
+                    if let Ok(sid_uuid) = Uuid::parse_str(&claims.sid) {
+                        let session_exists = sqlx::query!(
+                            "SELECT id FROM sessions WHERE id = $1 AND expires_at > NOW()",
+                            sid_uuid
+                        )
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+
+                        if session_exists.is_some() {
+                            if let Ok(user_id) = claims.sub.parse::<i32>() {
+                                req = req.data(AuthUser { 
+                                    id: user_id,
+                                    session_id: sid_uuid,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    schema.execute(req).await.into()
+}
+
+async fn graphql_playground() -> impl IntoResponse {
+    response::Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+}
+
+use tower_http::cors::{Any, CorsLayer};
 
 #[tokio::main]
 async fn main() {
-    // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Connect to database
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set in .env");
     
@@ -35,21 +106,25 @@ async fn main() {
 
     tracing::info!("✅ Database connected successfully!");
 
-    // Build the application with a route
-    let state = AppState { db: pool };
-    let app = Router::new()
-        .route("/", get(root))
-        .with_state(state);
+    let schema = Schema::build(Query, Mutation, EmptySubscription)
+        .data(pool.clone())
+        .finish();
 
-    // Define the address to listen on
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    let app = Router::new()
+        .route("/graphql", post(graphql_handler))
+        .route("/", get(graphql_playground))
+        .layer(Extension(schema))
+        .layer(Extension(pool.clone()))
+        .layer(cors);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("listening on {}", addr);
 
-    // Run the server
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn root(State(_state): State<AppState>) -> &'static str {
-    "🍺 Bier App Backend is running & Connected to DB!"
 }
