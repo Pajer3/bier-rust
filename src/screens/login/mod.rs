@@ -60,9 +60,11 @@ pub fn LoginScreen() -> Element {
             }
 
             a {
-                href: "#",
-                style: "align-self: flex-start; margin-bottom: 32px; font-weight: 600; font-size: 13px;",
-                onclick: move |_| nav.set(NavState::ForgotPassword),
+                style: "align-self: flex-start; margin-bottom: 32px; font-weight: 600; font-size: 13px; cursor: pointer;",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    nav.set(NavState::ForgotPassword);
+                },
                 "wachtwoord vergeten?"
             }
 
@@ -80,9 +82,11 @@ pub fn LoginScreen() -> Element {
                 style: "margin-top: 24px; font-size: 14px; color: var(--text2);",
                 "geen account? "
                 a {
-                    href: "#",
-                    style: "font-weight: 700; color: var(--text);",
-                    onclick: move |_| nav.set(NavState::Register),
+                    style: "font-weight: 700; color: var(--text); cursor: pointer;",
+                    onclick: move |evt| {
+                        evt.prevent_default();
+                        nav.set(NavState::Register);
+                    },
                     "Nieuw account."
                 }
             }

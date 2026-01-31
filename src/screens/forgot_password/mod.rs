@@ -71,9 +71,11 @@ pub fn ForgotPasswordScreen() -> Element {
                 div {
                     style: "margin-top: 24px; font-size: 14px; color: var(--text2);",
                     a {
-                        href: "#",
-                        style: "font-weight: 700; color: var(--text);",
-                        onclick: move |_| nav.set(NavState::Login),
+                        style: "font-weight: 700; color: var(--text); cursor: pointer;",
+                        onclick: move |evt| {
+                            evt.prevent_default();
+                            nav.set(NavState::Login);
+                        },
                         "Terug naar login."
                     }
                 }

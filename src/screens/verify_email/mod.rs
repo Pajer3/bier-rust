@@ -78,8 +78,7 @@ pub fn VerifyEmailScreen() -> Element {
                     style: "margin-top: 24px; font-size: 14px; color: var(--text2);",
                     "Geen code ontvangen? "
                     a {
-                        href: "#",
-                        style: "font-weight: 700; color: var(--text);",
+                        style: "font-weight: 700; color: var(--text); cursor: pointer;",
                         "Stuur opnieuw."
                     }
                 }
