@@ -113,6 +113,13 @@ async fn main() {
 
     tracing::info!("✅ Database connected successfully!");
 
+    tracing::info!("Running database migrations...");
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run database migrations");
+    tracing::info!("✅ Migrations executed successfully!");
+
     let schema = Schema::build(Query, Mutation, EmptySubscription)
         .data(pool.clone())
         .finish();

@@ -28,29 +28,42 @@ impl Query {
         "Hello World"
     }
 
-    async fn me(&self, ctx: &Context<'_>) -> Result<User, async_graphql::Error> {
-        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
-        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+    async fn me(&self, ctx: &Context<'_>) -> Option<User> {
+        let pool = ctx.data::<sqlx::PgPool>().ok()?;
+        let auth_user = ctx.data::<crate::AuthUser>().ok()?;
 
-        let user_record = sqlx::query!(
+        let rec = sqlx::query!(
             "SELECT id, email, password_hash, display_name, avatar_url, is_verified, created_at FROM users WHERE id = $1",
             auth_user.id
         )
         .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()?;
+
+        Some(User {
+            id: rec.id,
+            display_name: rec.display_name,
+            email: rec.email,
+            password_hash: rec.password_hash,
+            avatar_url: rec.avatar_url.unwrap_or_default(),
+            is_verified: rec.is_verified.unwrap_or(false),
+            created_at: rec.created_at.expect("Timestamp missing"),
+        })
+    }
+
+    async fn beers(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::beers::Beer>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        
+        // Simple fetch all for now, maybe add pagination later
+        let beers = sqlx::query_as!(
+            crate::definitions::beers::Beer,
+            "SELECT id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at FROM beers ORDER BY created_at DESC LIMIT 50"
+        )
+        .fetch_all(pool)
         .await?;
 
-        match user_record {
-            Some(u) => Ok(User {
-                id: u.id,
-                display_name: u.display_name,
-                email: u.email,
-                password_hash: u.password_hash,
-                avatar_url: u.avatar_url.unwrap_or_default(),
-                is_verified: u.is_verified.unwrap_or(false),
-                created_at: u.created_at.expect("Timestamp missing"),
-            }),
-            None => Err("Gebruiker niet gevonden".into()),
-        }
+        Ok(beers)
     }
 }
 
@@ -314,6 +327,7 @@ impl Mutation {
         token: String,
         new_password: String,
     ) -> Result<bool, async_graphql::Error> {
+        // ... (existing implementation)
         if new_password.len() < 8 {
             return Err("Wachtwoord moet minimaal 8 tekens zijn".into());
         }
@@ -356,5 +370,59 @@ impl Mutation {
         } else {
             Err("Token ongeldig of verlopen".into())
         }
+    }
+
+    async fn create_beer(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::definitions::beers::CreateBeerInput,
+    ) -> Result<crate::definitions::beers::Beer, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Je moet ingelogd zijn om een bier toe te voegen")?;
+
+        let beer = sqlx::query_as!(
+            crate::definitions::beers::Beer,
+            "INSERT INTO beers (name, brewery, type, abv, ibu, color, image_url, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at",
+            input.name,
+            input.brewery,
+            input.r#type,
+            input.abv,
+            input.ibu,
+            input.color,
+            input.image_url,
+            auth_user.id
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(beer)
+    }
+
+    async fn rate_beer(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::definitions::beers::CreateReviewInput,
+    ) -> Result<crate::definitions::beers::Review, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Je moet ingelogd zijn om een review te plaatsen")?;
+
+        if input.rating < 1 || input.rating > 5 {
+            return Err("Rating moet tussen 1 en 5 zijn".into());
+        }
+
+        let review = sqlx::query_as!(
+            crate::definitions::beers::Review,
+            "INSERT INTO reviews (user_id, beer_id, rating, text) VALUES ($1, $2, $3, $4) 
+             ON CONFLICT (user_id, beer_id) DO UPDATE SET rating = $3, text = $4, created_at = CURRENT_TIMESTAMP
+             RETURNING id, user_id, beer_id, rating, text, created_at",
+            auth_user.id,
+            input.beer_id,
+            input.rating,
+            input.text
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(review)
     }
 }
