@@ -1,0 +1,40 @@
+    Checking bier-rust v0.1.0 (/home/newhyde/school/bier-rust)
+error[E0425]: cannot find type `LdIcon` in module `dioxus_free_icons::icons::ld_icons`
+     --> src/components/navbar.rs:22:82
+      |
+   22 | ...icons::LdIcon, label: ...
+      |           ^^^^^^ help: a struct with a similar name exists: `LdMoon`
+      |
+     ::: /home/newhyde/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dioxus-free-icons-0.10.0/src/icons/ld_icons.rs:33882:1
+      |
+33882 | pub struct LdMoon;
+      | ----------------- similarly named struct `LdMoon` defined here
+
+error[E0599]: no method named `stroke` found for struct `IconPropsBuilder<..., ...>` in the current scope
+  --> src/components/navbar.rs:79:25
+   |
+44 | //     rsx! {
+45 | ||         nav {
+46 | ||             class: "glass-navbar",
+47 | ||             style: "
+...  ||
+78 | ||                         fill: "no...
+79 | ||                         stroke: "...
+   | ||                        -^^^^^^ method not found in `IconPropsBuilder<..., ...>`
+   | ||________________________|
+   | |
+...  |
+88 | |      }
+   | |      -
+   | |      |
+   | |      method `stroke` is available on `dioxus_free_icons::icon_component::IconPropsBuilder<((LdPlus,), (std::option::Option<u32>,), (std::option::Option<u32>,), (), (), (), ()), LdPlus>`
+   | |      method `stroke` is available on `dioxus_free_icons::icon_component::IconPropsBuilder<((), (std::option::Option<u32>,), (std::option::Option<u32>,), (), (), (), ()), LdPlus>`
+   | |______method `stroke` is available on `dioxus_free_icons::icon_component::IconPropsBuilder<((), (), (std::option::Option<u32>,), (), (), (), ()), LdPlus>`
+   |        method `stroke` is available on `dioxus_free_icons::icon_component::IconPropsBuilder<((), (), (), (), (), (), ()), LdPlus>`
+   |
+   = note: the full name for the type has been written to '/home/newhyde/school/bier-rust/target/debug/deps/bier_rust-e39e820fdd3c1e87.long-type-14829007610377079551.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+Some errors have detailed explanations: E0425, E0599.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `bier-rust` (bin "bier-rust") due to 2 previous errors

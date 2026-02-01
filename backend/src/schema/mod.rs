@@ -52,18 +52,258 @@ impl Query {
         })
     }
 
-    async fn beers(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::beers::Beer>, async_graphql::Error> {
+    async fn beers(
+        &self, 
+        ctx: &Context<'_>,
+        filter: Option<crate::definitions::beers::BeerFilter>,
+    ) -> Result<Vec<crate::definitions::beers::Beer>, async_graphql::Error> {
         let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
         
-        // Simple fetch all for now, maybe add pagination later
+        // We can't easily use PgArguments dynamically with sqlx::query_as! macro style string building without a builder.
+        // For simplicity, we'll use query_as without macro validation or handle optional params carefully.
+        // Actually, simple string concatenation for optional constraints is dangerous for SQL injection if not careful, 
+        // but parameters ($1, $2) are safe.
+
+        // Simpele implementatie: we halen alles op of gebruiken simpele filtering met sqlx::query_as en dynamische WHERE.
+        // sqlx QueryBuilder is hier het beste.
+        
+        let mut builder = sqlx::QueryBuilder::new("SELECT id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at FROM beers");
+        
+        if let Some(f) = filter {
+            let mut has_where = false;
+            
+            if let Some(s) = f.search {
+                builder.push(" WHERE (name ILIKE ");
+                builder.push_bind(format!("%{}%", s));
+                builder.push(" OR brewery ILIKE ");
+                builder.push_bind(format!("%{}%", s));
+                builder.push(")");
+                has_where = true;
+            }
+
+            if let Some(t) = f.r#type {
+                if has_where { builder.push(" AND "); } else { builder.push(" WHERE "); }
+                builder.push("type ILIKE ");
+                builder.push_bind(format!("%{}%", t));
+            }
+        }
+
+        builder.push(" ORDER BY created_at DESC LIMIT 50");
+
+        let beers = builder.build_query_as::<crate::definitions::beers::Beer>()
+            .fetch_all(pool)
+            .await?;
+
+        Ok(beers)
+    }
+
+    async fn beer(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+    ) -> Result<crate::definitions::beers::BeerDetail, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+
+        let beer = sqlx::query_as!(
+            crate::definitions::beers::Beer,
+            "SELECT id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at FROM beers WHERE id = $1",
+            id
+        )
+        .fetch_optional(pool)
+        .await?
+        .ok_or("Bier niet gevonden")?;
+
+        let reviews = sqlx::query_as!(
+            crate::definitions::beers::ReviewWithUser,
+            "SELECT r.id, r.user_id, u.display_name as user_name, r.beer_id, r.rating, r.text, r.created_at 
+             FROM reviews r
+             JOIN users u ON r.user_id = u.id
+             WHERE r.beer_id = $1
+             ORDER BY r.created_at DESC",
+            id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let count = reviews.len() as i64;
+        let avg = if count > 0 {
+            reviews.iter().map(|r| r.rating as f64).sum::<f64>() / (count as f64)
+        } else {
+            0.0
+        };
+
+        Ok(crate::definitions::beers::BeerDetail {
+            beer,
+            average_rating: avg,
+            review_count: count,
+            reviews,
+        })
+    }
+
+    async fn my_beers(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::beers::Beer>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
         let beers = sqlx::query_as!(
             crate::definitions::beers::Beer,
-            "SELECT id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at FROM beers ORDER BY created_at DESC LIMIT 50"
+            "SELECT id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at FROM beers WHERE created_by = $1 ORDER BY created_at DESC",
+            auth_user.id
         )
         .fetch_all(pool)
         .await?;
 
         Ok(beers)
+    }
+
+    async fn my_reviews(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::beers::Review>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        let reviews = sqlx::query_as!(
+            crate::definitions::beers::Review,
+            "SELECT id, user_id, beer_id, rating, text, created_at FROM reviews WHERE user_id = $1 ORDER BY created_at DESC",
+            auth_user.id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(reviews)
+    }
+
+    async fn clubs(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::clubs::Club>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        
+        // Return 50 most recently created clubs
+        let clubs = sqlx::query_as!(
+            crate::definitions::clubs::Club,
+            "SELECT id, name, slug, description, owner_id, image_url, image_path, created_at FROM clubs ORDER BY created_at DESC LIMIT 50"
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(clubs)
+    }
+
+    async fn club(
+        &self,
+        ctx: &Context<'_>,
+        id: i32,
+    ) -> Result<crate::definitions::clubs::Club, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+
+        let club = sqlx::query_as!(
+            crate::definitions::clubs::Club,
+            "SELECT id, name, slug, description, owner_id, image_url, image_path, created_at FROM clubs WHERE id = $1",
+            id
+        )
+        .fetch_optional(pool)
+        .await?
+        .ok_or("Club niet gevonden")?;
+
+        Ok(club)
+    }
+
+    async fn my_clubs(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::clubs::Club>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Find clubs where user is a member
+        let clubs = sqlx::query_as!(
+            crate::definitions::clubs::Club,
+            "SELECT c.id, c.name, c.slug, c.description, c.owner_id, c.image_url, c.image_path, c.created_at 
+             FROM clubs c
+             JOIN club_memberships m ON c.id = m.club_id
+             WHERE m.user_id = $1
+             ORDER BY m.joined_at DESC",
+            auth_user.id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(clubs)
+    }
+
+    async fn club_messages(
+        &self,
+        ctx: &Context<'_>,
+        club_id: i32,
+    ) -> Result<Vec<crate::definitions::chat::ClubMessage>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Check membership
+        let is_member = sqlx::query!(
+            "SELECT 1 as exists FROM club_memberships WHERE club_id = $1 AND user_id = $2 AND status = 'ACTIVE'::member_status",
+            club_id,
+            auth_user.id
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        if is_member.is_none() {
+            return Err("Je bent geen lid van deze club".into());
+        }
+
+        let messages = sqlx::query_as!(
+            crate::definitions::chat::ClubMessage,
+            "SELECT cm.id, cm.club_id as \"club_id!\", cm.user_id, cm.content as content, cm.created_at, u.display_name as user_display_name, u.avatar_url as user_avatar_url
+             FROM club_messages cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             WHERE cm.club_id = $1
+             ORDER BY cm.created_at ASC LIMIT 100",
+            club_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        // Decrypt messages
+        let mut decrypted_messages = Vec::new();
+        for mut msg in messages {
+            match crypto::decrypt_string(&msg.content) {
+                Ok(decrypted) => {
+                    msg.content = decrypted;
+                    decrypted_messages.push(msg);
+                },
+                Err(_) => {
+                    msg.content = "⚠️ Bericht kon niet ontsleuteld worden".to_string();
+                    decrypted_messages.push(msg);
+                }
+            }
+        }
+
+        Ok(decrypted_messages)
+    }
+
+    async fn events(&self, ctx: &Context<'_>) -> Result<Vec<crate::definitions::events::Event>, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        
+        let events = sqlx::query_as!(
+            crate::definitions::events::Event,
+            "SELECT id, club_id, title, description, location, starts_at, ends_at, created_by, created_at FROM events ORDER BY starts_at ASC LIMIT 50"
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(events)
+    }
+
+    async fn event(
+        &self,
+        ctx: &Context<'_>,
+        id: i32,
+    ) -> Result<crate::definitions::events::Event, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+
+        let event = sqlx::query_as!(
+            crate::definitions::events::Event,
+            "SELECT id, club_id, title, description, location, starts_at, ends_at, created_by, created_at FROM events WHERE id = $1",
+            id
+        )
+        .fetch_optional(pool)
+        .await?
+        .ok_or("Event niet gevonden")?;
+
+        Ok(event)
     }
 }
 
@@ -91,6 +331,7 @@ impl Mutation {
         email: String,
         password: String,
     ) -> Result<LoginResponse, async_graphql::Error> {
+        let email = crate::utils::sanitization::sanitize_email(&email);
         let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing in context")?;
 
         let user_record = sqlx::query!(
@@ -155,6 +396,7 @@ impl Mutation {
         email: String,
         password: String,
     ) -> Result<RegisterResponse, async_graphql::Error> {
+        let email = crate::utils::sanitization::sanitize_email(&email);
         if username.trim().len() < 3 {
              return Err("Gebruikersnaam moet minimaal 3 tekens zijn".into());
         }
@@ -295,6 +537,7 @@ impl Mutation {
     }
 
     async fn forgot_password(&self, ctx: &Context<'_>, email: String) -> Result<bool, async_graphql::Error> {
+        let email = crate::utils::sanitization::sanitize_email(&email);
         if !email.contains('@') || email.len() < 5 {
             return Err("Ongeldig e-mailadres".into());
         }
@@ -424,5 +667,199 @@ impl Mutation {
         .await?;
 
         Ok(review)
+    }
+
+    async fn delete_beer(
+        &self,
+        ctx: &Context<'_>,
+        beer_id: Uuid,
+    ) -> Result<bool, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Check ownership (only creator can delete for now, or admin if we had roles)
+        let result = sqlx::query!(
+            "DELETE FROM beers WHERE id = $1 AND created_by = $2",
+            beer_id,
+            auth_user.id
+        )
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err("Bier niet gevonden of je hebt geen rechten".into());
+        }
+
+        Ok(true)
+    }
+
+    async fn update_beer(
+        &self,
+        ctx: &Context<'_>,
+        beer_id: Uuid,
+        input: crate::definitions::beers::CreateBeerInput,
+    ) -> Result<crate::definitions::beers::Beer, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Check ownership and update
+        let beer = sqlx::query_as!(
+            crate::definitions::beers::Beer,
+            "UPDATE beers SET name = $1, brewery = $2, type = $3, abv = $4, ibu = $5, color = $6, image_url = $7 
+             WHERE id = $8 AND created_by = $9
+             RETURNING id, name, brewery, type as \"type\", abv, ibu, color, image_url, created_by, created_at",
+            input.name,
+            input.brewery,
+            input.r#type,
+            input.abv,
+            input.ibu,
+            input.color,
+            input.image_url,
+            beer_id,
+            auth_user.id
+        )
+        .fetch_optional(pool)
+        .await?
+        .ok_or("Bier niet gevonden of je hebt geen rechten")?;
+
+        Ok(beer)
+    }
+
+    async fn create_club(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::definitions::clubs::CreateClubInput,
+    ) -> Result<crate::definitions::clubs::Club, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        let slug = input.name.to_lowercase().replace(" ", "-"); // Simple slug
+        
+        // Transaction: Create Club + Add Owner Membership
+        let mut tx = pool.begin().await.map_err(|_| "Transaction start failed")?;
+
+        let club = sqlx::query_as!(
+            crate::definitions::clubs::Club,
+            "INSERT INTO clubs (name, slug, description, owner_id, image_url) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, slug, description, owner_id, image_url, image_path, created_at",
+            input.name,
+            slug,
+            input.description,
+            auth_user.id,
+            input.image_url
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // Add owner membership
+        sqlx::query!(
+            "INSERT INTO club_memberships (club_id, user_id, role, status) VALUES ($1, $2, 'OWNER'::user_role, 'ACTIVE'::member_status)",
+            club.id,
+            auth_user.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await.map_err(|_| "Transaction commit failed")?;
+
+        Ok(club)
+    }
+
+    async fn join_club(
+        &self,
+        ctx: &Context<'_>,
+        club_id: i32,
+    ) -> Result<bool, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        sqlx::query!(
+            "INSERT INTO club_memberships (club_id, user_id, role, status) VALUES ($1, $2, 'MEMBER'::user_role, 'ACTIVE'::member_status) ON CONFLICT DO NOTHING",
+            club_id,
+            auth_user.id
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(true)
+    }
+
+    async fn send_message(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::definitions::chat::SendMessageInput,
+    ) -> Result<crate::definitions::chat::ClubMessage, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Encrypt content
+        let encrypted_content = crypto::encrypt_string(&input.content)?;
+
+        let message = sqlx::query_as!(
+            crate::definitions::chat::ClubMessage,
+            "INSERT INTO club_messages (club_id, user_id, content) VALUES ($1, $2, $3) RETURNING id, club_id as \"club_id!\", user_id, content, created_at, NULL::text as user_display_name, NULL::text as user_avatar_url",
+            input.club_id,
+            auth_user.id,
+            encrypted_content
+        )
+        .fetch_one(pool)
+        .await?;
+
+        let mut result_msg = message;
+        result_msg.content = input.content; 
+        
+        Ok(result_msg)
+    }
+
+    async fn create_event(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::definitions::events::CreateEventInput,
+    ) -> Result<crate::definitions::events::Event, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        let event = sqlx::query_as!(
+            crate::definitions::events::Event,
+            "INSERT INTO events (club_id, title, description, location, starts_at, ends_at, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, club_id, title, description, location, starts_at, ends_at, created_by, created_at",
+            input.club_id,
+            input.title,
+            input.description,
+            input.location,
+            input.starts_at,
+            input.ends_at,
+            auth_user.id
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(event)
+    }
+
+    async fn rsvp_event(
+        &self,
+        ctx: &Context<'_>,
+        event_id: i32,
+        status: crate::definitions::events::RsvpStatus,
+    ) -> Result<bool, async_graphql::Error> {
+        let pool = ctx.data::<sqlx::PgPool>().map_err(|_| "Database pool missing")?;
+        let auth_user = ctx.data::<crate::AuthUser>().map_err(|_| "Niet ingelogd")?;
+
+        // Need to cast enum again?
+        // rsvp_status enum in DB: 'GOING', 'INTERESTED', 'NOT_GOING'
+        // Rust enum RsvpStatus::Going -> "GOING" (via rename_all)
+        // sqlx::Type should handle it if passed as param.
+        // Let's rely on sqlx type mapping this time as we defined it with #[derive(sqlx::Type)].
+        
+        sqlx::query!(
+            "INSERT INTO event_attendees (event_id, user_id, status) VALUES ($1, $2, $3) 
+             ON CONFLICT (event_id, user_id) DO UPDATE SET status = $3",
+            event_id,
+            auth_user.id,
+            status as crate::definitions::events::RsvpStatus 
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(true)
     }
 }

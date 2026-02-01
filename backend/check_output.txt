@@ -1,0 +1,101 @@
+    Checking backend v0.1.0 (/home/newhyde/school/bier-rust/backend)
+warning: unused import: `sqlx::types::Uuid`
+ --> src/definitions/clubs.rs:3:5
+  |
+3 | use sqlx::types::Uuid;
+  |     ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `sqlx::types::Uuid`
+ --> src/definitions/chat.rs:3:5
+  |
+3 | use sqlx::types::Uuid;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `sqlx::types::Uuid`
+ --> src/definitions/events.rs:3:5
+  |
+3 | use sqlx::types::Uuid;
+  |     ^^^^^^^^^^^^^^^^^
+
+error[E0063]: missing field `image_path` in initializer of `Club`
+   --> src/schema/mod.rs:178:13
+    |
+178 |             crate::definitions::clubs::Club,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `image_path`
+
+error[E0063]: missing field `image_path` in initializer of `Club`
+   --> src/schema/mod.rs:195:13
+    |
+195 |             crate::definitions::clubs::Club,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `image_path`
+
+error[E0063]: missing field `image_path` in initializer of `Club`
+   --> src/schema/mod.rs:212:13
+    |
+212 |             crate::definitions::clubs::Club,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `image_path`
+
+error[E0277]: the trait bound `i32: From<std::option::Option<i32>>` is not satisfied
+   --> src/schema/mod.rs:247:24
+    |
+247 |           let messages = sqlx::query_as!(
+    |  ________________________^
+248 | |             crate::definitions::chat::ClubMessage,
+249 | |             "SELECT cm.id, cm.club_id, cm.user_id, cm.content as cont...
+250 | |              FROM club_messages cm
+...   |
+254 | |             club_id
+255 | |         )
+    | |_________^ the trait `From<std::option::Option<i32>>` is not implemented for `i32`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `i32` implements `From<SignalKind>`
+              `i32` implements `From<bool>`
+              `i32` implements `From<deranged::RangedI32<MIN, MAX>>`
+              `i32` implements `From<errno::Errno>`
+              `i32` implements `From<i16>`
+              `i32` implements `From<i8>`
+              `i32` implements `From<socket2::Domain>`
+              `i32` implements `From<socket2::Protocol>`
+            and 5 others
+    = note: required for `std::option::Option<i32>` to implement `Into<i32>`
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_as` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0063]: missing field `image_path` in initializer of `Club`
+   --> src/schema/mod.rs:739:13
+    |
+739 |             crate::definitions::clubs::Club,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `image_path`
+
+error[E0277]: the trait bound `i32: From<std::option::Option<i32>>` is not satisfied
+   --> src/schema/mod.rs:794:23
+    |
+794 |           let message = sqlx::query_as!(
+    |  _______________________^
+795 | |             crate::definitions::chat::ClubMessage,
+796 | |             "INSERT INTO club_messages (club_id, user_id, content) VA...
+797 | |             input.club_id,
+798 | |             auth_user.id,
+799 | |             encrypted_content
+800 | |         )
+    | |_________^ the trait `From<std::option::Option<i32>>` is not implemented for `i32`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `i32` implements `From<SignalKind>`
+              `i32` implements `From<bool>`
+              `i32` implements `From<deranged::RangedI32<MIN, MAX>>`
+              `i32` implements `From<errno::Errno>`
+              `i32` implements `From<i16>`
+              `i32` implements `From<i8>`
+              `i32` implements `From<socket2::Domain>`
+              `i32` implements `From<socket2::Protocol>`
+            and 5 others
+    = note: required for `std::option::Option<i32>` to implement `Into<i32>`
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_as` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0063, E0277.
+For more information about an error, try `rustc --explain E0063`.
+warning: `backend` (bin "backend") generated 3 warnings
+error: could not compile `backend` (bin "backend") due to 6 previous errors; 3 warnings emitted

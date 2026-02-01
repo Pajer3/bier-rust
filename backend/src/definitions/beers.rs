@@ -46,3 +46,29 @@ pub struct CreateReviewInput {
     pub rating: i32,
     pub text: Option<String>,
 }
+
+#[derive(InputObject)]
+pub struct BeerFilter {
+    pub search: Option<String>,  // Matches name or brewery
+    pub r#type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, sqlx::FromRow)]
+pub struct ReviewWithUser {
+    pub id: Uuid,
+    pub user_id: i32,
+    pub user_name: String,
+    pub beer_id: Uuid,
+    pub rating: i32,
+    pub text: Option<String>,
+    #[graphql(skip)]
+    pub created_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct BeerDetail {
+    pub beer: Beer,
+    pub average_rating: f64,
+    pub review_count: i64,
+    pub reviews: Vec<ReviewWithUser>,
+}

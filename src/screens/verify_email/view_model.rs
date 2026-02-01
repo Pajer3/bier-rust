@@ -43,7 +43,7 @@ impl VerifyEmailViewModel {
         }
     }
 
-    pub async fn perform_verify(&self, mut auth: Option<Signal<AuthState>>) {
+    pub async fn perform_verify(&self, auth: Option<Signal<AuthState>>) {
         let mut is_loading = self.is_loading;
         let mut success = self.success;
         let mut error_msg = self.error_msg;

@@ -50,7 +50,7 @@ fn App() -> Element {
             } else if !auth().is_verified {
                  VerifyEmailScreen {}
             } else {
-                 HomeScreen {}
+                 Dashboard {}
             }
         }
     }
